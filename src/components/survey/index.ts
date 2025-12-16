@@ -14,4 +14,5 @@ export { StepChannels } from './StepChannels';
 export { StepPrice } from './StepPrice';
 export { StepBrand } from './StepBrand';
 export { SubmitSuccess } from './SubmitSuccess';
+export { AddFriendPrompt } from './AddFriendPrompt';
 

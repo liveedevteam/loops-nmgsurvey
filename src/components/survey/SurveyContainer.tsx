@@ -3,6 +3,7 @@
  * 
  * Main orchestrator component that manages the entire survey flow.
  * Handles step navigation, form state, validation, and submission.
+ * Also checks if user has added the Official Account as friend.
  */
 
 'use client';
@@ -31,12 +32,20 @@ import { StepChannels } from './StepChannels';
 import { StepPrice } from './StepPrice';
 import { StepBrand } from './StepBrand';
 import { SubmitSuccess } from './SubmitSuccess';
+import { AddFriendPrompt } from './AddFriendPrompt';
 
 const TOTAL_STEPS = 5;
 
 export function SurveyContainer() {
   // LIFF context
-  const { isLoading: liffLoading, error: liffError, profile, isLoggedIn } = useLiff();
+  const {
+    isLoading: liffLoading,
+    error: liffError,
+    profile,
+    isLoggedIn,
+    isFriend,
+    isCheckingFriendship,
+  } = useLiff();
 
   // Survey state
   const [currentStep, setCurrentStep] = useState(1);
@@ -48,7 +57,7 @@ export function SurveyContainer() {
   const statusQuery = trpc.survey.getStatus.useQuery(
     { lineUserId: profile?.userId ?? '' },
     {
-      enabled: !!profile?.userId,
+      enabled: !!profile?.userId && isFriend, // Only check status if user is friend
       retry: false,
     }
   );
@@ -177,7 +186,7 @@ export function SurveyContainer() {
   };
 
   // Loading state
-  if (liffLoading || statusQuery.isLoading) {
+  if (liffLoading || isCheckingFriendship) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-teal-50 via-white to-emerald-50">
         <motion.div
@@ -237,6 +246,27 @@ export function SurveyContainer() {
     );
   }
 
+  // Not friend state - show add friend prompt
+  if (!isFriend) {
+    return <AddFriendPrompt />;
+  }
+
+  // Status query loading state (after friendship confirmed)
+  if (statusQuery.isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-teal-50 via-white to-emerald-50">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <Loader2 className="w-12 h-12 text-teal-500 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 font-medium">Checking your status...</p>
+        </motion.div>
+      </div>
+    );
+  }
+
   // Success state
   if (isSubmitted && couponCode) {
     return <SubmitSuccess couponCode={couponCode} />;
@@ -278,4 +308,3 @@ export function SurveyContainer() {
 }
 
 export default SurveyContainer;
-
