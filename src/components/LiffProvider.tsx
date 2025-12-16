@@ -54,7 +54,7 @@ interface LiffContextValue {
   /** Open the add friend URL to add the Official Account */
   addFriend: () => void;
   /** Re-check friendship status (after user adds OA) */
-  recheckFriendship: () => Promise<void>;
+  recheckFriendship: () => Promise<boolean>;
   /** Skip friendship check and proceed (use with caution) */
   skipFriendshipCheck: () => void;
   /** Whether running in mock mode (profile only) */
@@ -95,39 +95,71 @@ export function LiffProvider({ children }: LiffProviderProps) {
   const [isFriend, setIsFriend] = useState(false);
   const [isCheckingFriendship, setIsCheckingFriendship] = useState(false);
   const [isMockMode, setIsMockMode] = useState(false);
-  const [isLiffReady, setIsLiffReady] = useState(false);
+
+  /**
+   * Check if LIFF SDK is ready for API calls
+   */
+  const isLiffAvailable = useCallback((): boolean => {
+    try {
+      // Check if liff object exists and is initialized
+      return typeof liff !== 'undefined' && liff.isLoggedIn();
+    } catch {
+      return false;
+    }
+  }, []);
 
   /**
    * Check friendship status with Official Account using real API
    */
   const checkFriendship = useCallback(async (): Promise<boolean> => {
-    // Always try real API first if LIFF is ready
-    if (isLiffReady) {
-      try {
-        setIsCheckingFriendship(true);
-        const friendship = await liff.getFriendship();
-        console.log('👥 Friendship status:', friendship.friendFlag ? 'Friend' : 'Not friend');
-        setIsFriend(friendship.friendFlag);
-        return friendship.friendFlag;
-      } catch (friendshipError) {
-        console.error('Failed to check friendship:', friendshipError);
-        setIsFriend(false);
-        return false;
-      } finally {
-        setIsCheckingFriendship(false);
-      }
+    console.log('🔍 Starting friendship check...');
+    
+    // Check if LIFF is available
+    if (!isLiffAvailable()) {
+      console.log('⚠️ LIFF not available for friendship check');
+      return isFriend;
     }
 
-    // LIFF not ready - return current state
-    console.log('⚠️ LIFF not ready, cannot check friendship');
-    return isFriend;
-  }, [isLiffReady, isFriend]);
+    try {
+      setIsCheckingFriendship(true);
+      console.log('📡 Calling liff.getFriendship()...');
+      
+      const friendship = await liff.getFriendship();
+      
+      console.log('👥 Friendship API response:', {
+        friendFlag: friendship.friendFlag,
+      });
+      
+      setIsFriend(friendship.friendFlag);
+      
+      if (friendship.friendFlag) {
+        console.log('✅ User IS a friend of the Official Account');
+      } else {
+        console.log('❌ User is NOT a friend of the Official Account');
+        console.log('ℹ️ Make sure:');
+        console.log('   1. The LIFF app is linked to a LINE Official Account');
+        console.log('   2. The user has added THAT specific Official Account');
+        console.log('   3. The Messaging API channel is properly configured');
+      }
+      
+      return friendship.friendFlag;
+    } catch (friendshipError) {
+      console.error('❌ Failed to check friendship:', friendshipError);
+      console.log('ℹ️ This error usually means:');
+      console.log('   - The LIFF app is not linked to a LINE Official Account');
+      console.log('   - Or the LINE Developers Console settings are incorrect');
+      setIsFriend(false);
+      return false;
+    } finally {
+      setIsCheckingFriendship(false);
+    }
+  }, [isLiffAvailable, isFriend]);
 
   /**
    * Re-check friendship status (called after user adds OA)
    */
-  const recheckFriendship = useCallback(async () => {
-    await checkFriendship();
+  const recheckFriendship = useCallback(async (): Promise<boolean> => {
+    return await checkFriendship();
   }, [checkFriendship]);
 
   /**
@@ -137,6 +169,10 @@ export function LiffProvider({ children }: LiffProviderProps) {
     const initLiff = async () => {
       const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
       const isDev = process.env.NODE_ENV === 'development';
+
+      console.log('🚀 Initializing LIFF...');
+      console.log('   LIFF ID:', liffId ? `${liffId.substring(0, 10)}...` : 'NOT SET');
+      console.log('   Environment:', isDev ? 'development' : 'production');
 
       if (!liffId) {
         if (isDev) {
@@ -159,16 +195,20 @@ export function LiffProvider({ children }: LiffProviderProps) {
       try {
         // Initialize LIFF SDK
         await liff.init({ liffId });
+        console.log('✅ LIFF initialized successfully');
         setIsInitialized(true);
-        setIsLiffReady(true);
 
         // Check login status
-        if (liff.isLoggedIn()) {
+        const loggedIn = liff.isLoggedIn();
+        console.log('👤 Login status:', loggedIn ? 'Logged in' : 'Not logged in');
+        
+        if (loggedIn) {
           setIsLoggedIn(true);
 
           // Fetch user profile
           try {
             const userProfile = await liff.getProfile();
+            console.log('👤 Profile loaded:', userProfile.displayName);
             setProfile({
               userId: userProfile.userId,
               displayName: userProfile.displayName,
@@ -181,9 +221,10 @@ export function LiffProvider({ children }: LiffProviderProps) {
           }
 
           // Check friendship status with OA using real API
+          console.log('🔍 Checking initial friendship status...');
           try {
             const friendship = await liff.getFriendship();
-            console.log('👥 Friendship status:', friendship.friendFlag ? 'Friend' : 'Not friend');
+            console.log('👥 Initial friendship status:', friendship.friendFlag ? 'Friend' : 'Not friend');
             setIsFriend(friendship.friendFlag);
           } catch (friendshipError) {
             console.error('Failed to check friendship:', friendshipError);
@@ -192,8 +233,9 @@ export function LiffProvider({ children }: LiffProviderProps) {
           }
         } else {
           // Not logged in - redirect to LINE login
+          console.log('🔐 User not logged in, checking if in LINE client...');
           if (!liff.isInClient()) {
-            // External browser - need to login
+            console.log('🔐 External browser detected, redirecting to LINE login...');
             liff.login();
           }
         }
@@ -224,25 +266,28 @@ export function LiffProvider({ children }: LiffProviderProps) {
    * Close LIFF window
    */
   const closeLiff = useCallback(() => {
-    if (isMockMode && !isLiffReady) {
+    if (isMockMode) {
       console.log('🔧 Mock mode: Would close LIFF window');
       alert('Survey completed! In LINE, this window would close automatically.');
       return;
     }
     
-    if (liff.isInClient()) {
-      liff.closeWindow();
-    } else {
-      // Not in LINE app, just show a message
+    try {
+      if (liff.isInClient()) {
+        liff.closeWindow();
+      } else {
+        window.close();
+      }
+    } catch {
       window.close();
     }
-  }, [isMockMode, isLiffReady]);
+  }, [isMockMode]);
 
   /**
    * Trigger LINE login
    */
   const login = useCallback(() => {
-    if (isMockMode && !isLiffReady) {
+    if (isMockMode) {
       console.log('🔧 Mock mode: Already logged in');
       return;
     }
@@ -250,7 +295,7 @@ export function LiffProvider({ children }: LiffProviderProps) {
     if (isInitialized && !isLoggedIn) {
       liff.login();
     }
-  }, [isInitialized, isLoggedIn, isMockMode, isLiffReady]);
+  }, [isInitialized, isLoggedIn, isMockMode]);
 
   /**
    * Open the Official Account add friend page
@@ -259,8 +304,11 @@ export function LiffProvider({ children }: LiffProviderProps) {
   const addFriend = useCallback(() => {
     const oaBasicId = process.env.NEXT_PUBLIC_LINE_OA_BASIC_ID;
     
+    console.log('👥 Opening add friend page...');
+    console.log('   OA Basic ID:', oaBasicId || 'NOT SET');
+    
     if (!oaBasicId) {
-      console.warn('LINE OA Basic ID not configured');
+      console.warn('⚠️ LINE OA Basic ID not configured');
       // In mock mode without OA ID, just simulate
       if (isMockMode) {
         console.log('🔧 Mock mode: Simulating add friend (no OA ID configured)');
@@ -271,18 +319,26 @@ export function LiffProvider({ children }: LiffProviderProps) {
 
     // Always try to open real add friend URL
     const addFriendUrl = `https://line.me/R/ti/p/${oaBasicId}`;
+    console.log('🔗 Add friend URL:', addFriendUrl);
     
-    if (isLiffReady && liff.isInClient()) {
-      // In LINE app - use LIFF openWindow
-      liff.openWindow({
-        url: addFriendUrl,
-        external: false,
-      });
-    } else {
-      // External browser or mock mode - open in new tab
+    try {
+      if (liff.isInClient()) {
+        // In LINE app - use LIFF openWindow
+        console.log('📱 Opening in LINE client...');
+        liff.openWindow({
+          url: addFriendUrl,
+          external: false,
+        });
+      } else {
+        // External browser - open in new tab
+        console.log('🌐 Opening in external browser...');
+        window.open(addFriendUrl, '_blank');
+      }
+    } catch {
+      // Fallback to window.open
       window.open(addFriendUrl, '_blank');
     }
-  }, [isMockMode, isLiffReady]);
+  }, [isMockMode]);
 
   /**
    * Skip friendship check and proceed
