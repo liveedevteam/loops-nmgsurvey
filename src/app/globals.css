@@ -2,26 +2,214 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-}
+/* ============================================
+   Custom Utilities
+   ============================================ */
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+  
+  /* Safe area padding for mobile devices */
+  .safe-area-pt {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .safe-area-pl {
+    padding-left: env(safe-area-inset-left);
+  }
+  
+  .safe-area-pr {
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* ============================================
+   ShadCN CSS Variables
+   ============================================ */
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    
+    /* Teal/Emerald primary theme */
+    --primary: 166 84% 30%;
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 160 30% 96%;
+    --secondary-foreground: 166 84% 30%;
+    
+    --muted: 160 20% 96%;
+    --muted-foreground: 215 16% 47%;
+    
+    --accent: 160 30% 96%;
+    --accent-foreground: 166 84% 30%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 166 84% 30%;
+    
+    --radius: 0.75rem;
+    
+    /* Chart colors */
+    --chart-1: 166 84% 30%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+  }
+  
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 0 0% 98%;
+    
+    --card: 224 47% 14%;
+    --card-foreground: 0 0% 98%;
+    
+    --popover: 224 47% 14%;
+    --popover-foreground: 0 0% 98%;
+    
+    --primary: 166 72% 50%;
+    --primary-foreground: 222 47% 11%;
+    
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 0 0% 98%;
+    
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    
+    --accent: 217 33% 17%;
+    --accent-foreground: 0 0% 98%;
+    
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 98%;
+    
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 166 72% 50%;
+  }
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Prevent pull-to-refresh on mobile */
+  html, body {
+    overscroll-behavior: none;
+  }
+  
+  /* Focus styles for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2;
+  }
+}
+
+/* ============================================
+   Custom Component Styles
+   ============================================ */
+
+@layer components {
+  /* Premium button gradient */
+  .btn-gradient {
+    @apply bg-gradient-to-r from-teal-500 to-emerald-500;
+    @apply hover:from-teal-600 hover:to-emerald-600;
+    @apply transition-all duration-200;
+  }
+  
+  /* Card with subtle shadow */
+  .card-premium {
+    @apply bg-white rounded-2xl shadow-sm;
+    @apply border border-gray-100;
+  }
+  
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-md;
+  }
+}
+
+/* ============================================
+   Animation Keyframes
+   ============================================ */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.5s ease-out;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s ease-in-out infinite;
 }
