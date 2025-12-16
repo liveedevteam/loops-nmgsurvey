@@ -9,7 +9,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { UserPlus, MessageCircle, Gift, RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
+import { UserPlus, MessageCircle, Gift, RefreshCw, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLiff } from '@/components/LiffProvider';
 import { toast } from 'sonner';
@@ -24,32 +24,51 @@ export function AddFriendPrompt() {
   };
 
   const handleRefresh = async () => {
-    toast.loading('Checking friendship status...', { id: 'friendship-check' });
+    const toastId = 'friendship-check';
+    toast.loading('Checking friendship status...', { id: toastId });
     
     try {
-      await recheckFriendship();
+      const isFriendNow = await recheckFriendship();
       
-      // If still on this page after recheck, it means user is still not friend
-      // This is handled by React re-render, but we can show feedback
-      setRetryCount((prev) => prev + 1);
-      
-      // After 2 retries, show skip option
-      if (retryCount >= 1) {
-        setShowSkipOption(true);
-        toast.error('Still not detected as friend. You can try again or proceed anyway.', {
-          id: 'friendship-check',
-          duration: 5000,
+      if (isFriendNow) {
+        // Success! The component will re-render and show the survey
+        toast.success('Great! You\'re now a friend. Proceeding to survey...', {
+          id: toastId,
+          icon: <CheckCircle className="w-4 h-4" />,
+          duration: 2000,
         });
       } else {
-        toast.info('Checking again... Please make sure you\'ve added our Official Account.', {
-          id: 'friendship-check',
-          duration: 3000,
-        });
+        // Still not detected as friend
+        setRetryCount((prev) => prev + 1);
+        
+        // After 2 retries, show skip option
+        if (retryCount >= 1) {
+          setShowSkipOption(true);
+          toast.error(
+            'Friendship not detected. Please make sure you\'ve added the correct Official Account, or proceed anyway.',
+            {
+              id: toastId,
+              duration: 5000,
+            }
+          );
+        } else {
+          toast.info(
+            'Not detected yet. Please make sure you\'ve added our Official Account and try again.',
+            {
+              id: toastId,
+              duration: 4000,
+            }
+          );
+        }
       }
     } catch (error) {
       console.error('Friendship check error:', error);
+      setRetryCount((prev) => prev + 1);
+      if (retryCount >= 1) {
+        setShowSkipOption(true);
+      }
       toast.error('Failed to check friendship status. Please try again.', {
-        id: 'friendship-check',
+        id: toastId,
       });
     }
   };
@@ -181,7 +200,7 @@ export function AddFriendPrompt() {
                 <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-700 text-left">
                   If you&apos;ve already added us but it&apos;s not being detected, 
-                  you can proceed anyway. Note that you might not receive the coupon via LINE.
+                  you can proceed anyway. Note that you might not receive the coupon via LINE message.
                 </p>
               </div>
               <Button
@@ -205,7 +224,7 @@ export function AddFriendPrompt() {
           After adding us as a friend, tap &quot;I&apos;ve Added, Continue&quot; to proceed with the survey.
         </motion.p>
 
-        {/* Mock mode indicator */}
+        {/* Debug info in dev mode */}
         {isMockMode && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -214,7 +233,7 @@ export function AddFriendPrompt() {
             className="mt-4 p-2 bg-yellow-50 rounded-lg"
           >
             <p className="text-xs text-yellow-600">
-              🔧 Development mode: Click &quot;Add Friend&quot; to simulate adding OA
+              🔧 Development mode: Open browser console to see friendship check logs
             </p>
           </motion.div>
         )}
