@@ -7,20 +7,58 @@
 
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { UserPlus, MessageCircle, Gift, RefreshCw, Loader2 } from 'lucide-react';
+import { UserPlus, MessageCircle, Gift, RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLiff } from '@/components/LiffProvider';
+import { toast } from 'sonner';
 
 export function AddFriendPrompt() {
-  const { addFriend, recheckFriendship, isCheckingFriendship, isMockMode } = useLiff();
+  const { addFriend, recheckFriendship, skipFriendshipCheck, isCheckingFriendship, isMockMode } = useLiff();
+  const [retryCount, setRetryCount] = useState(0);
+  const [showSkipOption, setShowSkipOption] = useState(false);
 
   const handleAddFriend = () => {
     addFriend();
   };
 
   const handleRefresh = async () => {
-    await recheckFriendship();
+    toast.loading('Checking friendship status...', { id: 'friendship-check' });
+    
+    try {
+      await recheckFriendship();
+      
+      // If still on this page after recheck, it means user is still not friend
+      // This is handled by React re-render, but we can show feedback
+      setRetryCount((prev) => prev + 1);
+      
+      // After 2 retries, show skip option
+      if (retryCount >= 1) {
+        setShowSkipOption(true);
+        toast.error('Still not detected as friend. You can try again or proceed anyway.', {
+          id: 'friendship-check',
+          duration: 5000,
+        });
+      } else {
+        toast.info('Checking again... Please make sure you\'ve added our Official Account.', {
+          id: 'friendship-check',
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      console.error('Friendship check error:', error);
+      toast.error('Failed to check friendship status. Please try again.', {
+        id: 'friendship-check',
+      });
+    }
+  };
+
+  const handleSkip = () => {
+    // Force proceed - this will skip the friendship check
+    // The user claims they've added the OA, so we trust them
+    toast.success('Proceeding to survey...', { id: 'skip-check' });
+    skipFriendshipCheck();
   };
 
   return (
@@ -131,6 +169,30 @@ export function AddFriendPrompt() {
               </>
             )}
           </Button>
+
+          {/* Skip option after multiple retries */}
+          {showSkipOption && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="pt-4 border-t border-gray-100"
+            >
+              <div className="flex items-start gap-2 mb-3 p-3 bg-amber-50 rounded-lg">
+                <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700 text-left">
+                  If you&apos;ve already added us but it&apos;s not being detected, 
+                  you can proceed anyway. Note that you might not receive the coupon via LINE.
+                </p>
+              </div>
+              <Button
+                onClick={handleSkip}
+                variant="ghost"
+                className="w-full h-10 text-sm text-gray-500"
+              >
+                Proceed without verification →
+              </Button>
+            </motion.div>
+          )}
         </motion.div>
 
         {/* Help text */}
@@ -162,4 +224,3 @@ export function AddFriendPrompt() {
 }
 
 export default AddFriendPrompt;
-

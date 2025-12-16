@@ -5,7 +5,8 @@
  * user profile data to the application via React Context.
  * 
  * Also checks friendship status to ensure user has added the OA.
- * In development mode, provides mock data if LIFF initialization fails.
+ * In development mode, provides mock profile data if LIFF initialization fails,
+ * but friendship checking uses real API when possible.
  */
 
 'use client';
@@ -54,7 +55,9 @@ interface LiffContextValue {
   addFriend: () => void;
   /** Re-check friendship status (after user adds OA) */
   recheckFriendship: () => Promise<void>;
-  /** Whether running in mock mode */
+  /** Skip friendship check and proceed (use with caution) */
+  skipFriendshipCheck: () => void;
+  /** Whether running in mock mode (profile only) */
   isMockMode: boolean;
 }
 
@@ -92,31 +95,33 @@ export function LiffProvider({ children }: LiffProviderProps) {
   const [isFriend, setIsFriend] = useState(false);
   const [isCheckingFriendship, setIsCheckingFriendship] = useState(false);
   const [isMockMode, setIsMockMode] = useState(false);
+  const [isLiffReady, setIsLiffReady] = useState(false);
 
   /**
-   * Check friendship status with Official Account
+   * Check friendship status with Official Account using real API
    */
   const checkFriendship = useCallback(async (): Promise<boolean> => {
-    if (isMockMode) {
-      console.log('🔧 Mock mode: Assuming user is friend');
-      return true;
+    // Always try real API first if LIFF is ready
+    if (isLiffReady) {
+      try {
+        setIsCheckingFriendship(true);
+        const friendship = await liff.getFriendship();
+        console.log('👥 Friendship status:', friendship.friendFlag ? 'Friend' : 'Not friend');
+        setIsFriend(friendship.friendFlag);
+        return friendship.friendFlag;
+      } catch (friendshipError) {
+        console.error('Failed to check friendship:', friendshipError);
+        setIsFriend(false);
+        return false;
+      } finally {
+        setIsCheckingFriendship(false);
+      }
     }
 
-    try {
-      setIsCheckingFriendship(true);
-      const friendship = await liff.getFriendship();
-      console.log('👥 Friendship status:', friendship.friendFlag ? 'Friend' : 'Not friend');
-      setIsFriend(friendship.friendFlag);
-      return friendship.friendFlag;
-    } catch (friendshipError) {
-      console.error('Failed to check friendship:', friendshipError);
-      // If we can't check, assume not friend to be safe
-      setIsFriend(false);
-      return false;
-    } finally {
-      setIsCheckingFriendship(false);
-    }
-  }, [isMockMode]);
+    // LIFF not ready - return current state
+    console.log('⚠️ LIFF not ready, cannot check friendship');
+    return isFriend;
+  }, [isLiffReady, isFriend]);
 
   /**
    * Re-check friendship status (called after user adds OA)
@@ -135,12 +140,13 @@ export function LiffProvider({ children }: LiffProviderProps) {
 
       if (!liffId) {
         if (isDev) {
-          // Use mock mode in development
+          // Use mock mode in development - but start with isFriend = false
+          // so we can test the AddFriendPrompt flow
           console.log('🔧 LIFF mock mode: No LIFF ID configured');
           setIsMockMode(true);
           setIsInitialized(true);
           setIsLoggedIn(true);
-          setIsFriend(true); // Assume friend in mock mode
+          setIsFriend(false); // Start as not friend to test the flow
           setProfile(MOCK_PROFILE);
           setIsLoading(false);
           return;
@@ -154,6 +160,7 @@ export function LiffProvider({ children }: LiffProviderProps) {
         // Initialize LIFF SDK
         await liff.init({ liffId });
         setIsInitialized(true);
+        setIsLiffReady(true);
 
         // Check login status
         if (liff.isLoggedIn()) {
@@ -173,7 +180,7 @@ export function LiffProvider({ children }: LiffProviderProps) {
             setError('Failed to get user profile');
           }
 
-          // Check friendship status with OA
+          // Check friendship status with OA using real API
           try {
             const friendship = await liff.getFriendship();
             console.log('👥 Friendship status:', friendship.friendFlag ? 'Friend' : 'Not friend');
@@ -193,13 +200,13 @@ export function LiffProvider({ children }: LiffProviderProps) {
       } catch (initError) {
         console.error('LIFF init error:', initError);
         
-        // In development, fallback to mock mode
+        // In development, fallback to mock mode for profile only
         if (isDev) {
           console.log('🔧 LIFF mock mode: Using mock data for development');
           setIsMockMode(true);
           setIsInitialized(true);
           setIsLoggedIn(true);
-          setIsFriend(true); // Assume friend in mock mode
+          setIsFriend(false); // Start as not friend to test the flow
           setProfile(MOCK_PROFILE);
           setError(null);
         } else {
@@ -217,7 +224,7 @@ export function LiffProvider({ children }: LiffProviderProps) {
    * Close LIFF window
    */
   const closeLiff = useCallback(() => {
-    if (isMockMode) {
+    if (isMockMode && !isLiffReady) {
       console.log('🔧 Mock mode: Would close LIFF window');
       alert('Survey completed! In LINE, this window would close automatically.');
       return;
@@ -229,13 +236,13 @@ export function LiffProvider({ children }: LiffProviderProps) {
       // Not in LINE app, just show a message
       window.close();
     }
-  }, [isMockMode]);
+  }, [isMockMode, isLiffReady]);
 
   /**
    * Trigger LINE login
    */
   const login = useCallback(() => {
-    if (isMockMode) {
+    if (isMockMode && !isLiffReady) {
       console.log('🔧 Mock mode: Already logged in');
       return;
     }
@@ -243,38 +250,48 @@ export function LiffProvider({ children }: LiffProviderProps) {
     if (isInitialized && !isLoggedIn) {
       liff.login();
     }
-  }, [isInitialized, isLoggedIn, isMockMode]);
+  }, [isInitialized, isLoggedIn, isMockMode, isLiffReady]);
 
   /**
    * Open the Official Account add friend page
    * Uses LINE's add friend URL scheme
    */
   const addFriend = useCallback(() => {
-    if (isMockMode) {
-      console.log('🔧 Mock mode: Would open add friend page');
-      setIsFriend(true); // Simulate adding friend in mock mode
+    const oaBasicId = process.env.NEXT_PUBLIC_LINE_OA_BASIC_ID;
+    
+    if (!oaBasicId) {
+      console.warn('LINE OA Basic ID not configured');
+      // In mock mode without OA ID, just simulate
+      if (isMockMode) {
+        console.log('🔧 Mock mode: Simulating add friend (no OA ID configured)');
+        setIsFriend(true);
+      }
       return;
     }
 
-    // Get the OA Basic ID from environment or use a fallback
-    // The add friend URL format: https://line.me/R/ti/p/@{basic_id}
-    // Or using LIFF: can open the OA chat directly
+    // Always try to open real add friend URL
+    const addFriendUrl = `https://line.me/R/ti/p/${oaBasicId}`;
     
-    // If in LIFF, we can use openWindow to open the add friend page
-    if (liff.isInClient()) {
-      // Open the LINE OA profile page where user can add as friend
-      // This requires the OA Basic ID to be configured
-      const oaBasicId = process.env.NEXT_PUBLIC_LINE_OA_BASIC_ID;
-      if (oaBasicId) {
-        liff.openWindow({
-          url: `https://line.me/R/ti/p/${oaBasicId}`,
-          external: false,
-        });
-      } else {
-        console.warn('LINE OA Basic ID not configured');
-      }
+    if (isLiffReady && liff.isInClient()) {
+      // In LINE app - use LIFF openWindow
+      liff.openWindow({
+        url: addFriendUrl,
+        external: false,
+      });
+    } else {
+      // External browser or mock mode - open in new tab
+      window.open(addFriendUrl, '_blank');
     }
-  }, [isMockMode]);
+  }, [isMockMode, isLiffReady]);
+
+  /**
+   * Skip friendship check and proceed
+   * Use when user has added OA but detection isn't working
+   */
+  const skipFriendshipCheck = useCallback(() => {
+    console.log('⚠️ Skipping friendship check - user confirmed they added OA');
+    setIsFriend(true);
+  }, []);
 
   const value: LiffContextValue = {
     isInitialized,
@@ -288,6 +305,7 @@ export function LiffProvider({ children }: LiffProviderProps) {
     login,
     addFriend,
     recheckFriendship,
+    skipFriendshipCheck,
     isMockMode,
   };
 
