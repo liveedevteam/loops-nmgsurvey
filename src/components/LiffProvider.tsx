@@ -145,6 +145,18 @@ export function LiffProvider({ children }: LiffProviderProps) {
       return friendship.friendFlag;
     } catch (friendshipError) {
       console.error('❌ Failed to check friendship:', friendshipError);
+      
+      // Check if this is the "no bot linked" error
+      const errorMessage = friendshipError instanceof Error ? friendshipError.message : String(friendshipError);
+      if (errorMessage.includes('no login bot linked') || errorMessage.includes('There is no login bot')) {
+        console.log('⚠️ LIFF app is NOT linked to a LINE Official Account!');
+        console.log('📋 To fix: Go to LINE Developers Console → LIFF → Link to Official Account');
+        console.log('⚠️ Cannot verify friendship - allowing user to proceed');
+        // Can't check friendship, let user proceed
+        setIsFriend(true);
+        return true;
+      }
+      
       console.log('ℹ️ This error usually means:');
       console.log('   - The LIFF app is not linked to a LINE Official Account');
       console.log('   - Or the LINE Developers Console settings are incorrect');
@@ -228,8 +240,19 @@ export function LiffProvider({ children }: LiffProviderProps) {
             setIsFriend(friendship.friendFlag);
           } catch (friendshipError) {
             console.error('Failed to check friendship:', friendshipError);
-            // If friendship check fails, assume not friend
-            setIsFriend(false);
+            
+            // Check if this is the "no bot linked" error - means LIFF is not configured properly
+            const errorMessage = friendshipError instanceof Error ? friendshipError.message : String(friendshipError);
+            if (errorMessage.includes('no login bot linked') || errorMessage.includes('There is no login bot')) {
+              console.log('⚠️ LIFF app is NOT linked to a LINE Official Account!');
+              console.log('📋 To fix: Go to LINE Developers Console → LIFF → Link to Official Account');
+              console.log('⚠️ Skipping friendship check - allowing user to proceed');
+              // When bot is not linked, we can't check friendship. Let user proceed.
+              setIsFriend(true);
+            } else {
+              // For other errors, assume not friend
+              setIsFriend(false);
+            }
           }
         } else {
           // Not logged in - redirect to LINE login

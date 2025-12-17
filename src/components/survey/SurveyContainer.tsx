@@ -3,7 +3,13 @@
  * 
  * Main orchestrator component that manages the entire survey flow.
  * Handles step navigation, form state, validation, and submission.
- * Also checks if user has added the Official Account as friend.
+ * 
+ * Flow:
+ * 1. User completes survey
+ * 2. User submits → data saved to DB
+ * 3. Check if user has added LINE OA
+ *    - If YES → Show coupon
+ *    - If NO → Show AddFriendPrompt → After adding → Show coupon
  */
 
 'use client';
@@ -32,7 +38,7 @@ import { StepChannels } from './StepChannels';
 import { StepPrice } from './StepPrice';
 import { StepBrand } from './StepBrand';
 import { SubmitSuccess } from './SubmitSuccess';
-import { AddFriendPrompt } from './AddFriendPrompt';
+import { AddFriendPromptPostSubmit } from './AddFriendPromptPostSubmit';
 
 const TOTAL_STEPS = 5;
 
@@ -44,6 +50,7 @@ export function SurveyContainer() {
     profile,
     isLoggedIn,
     isFriend,
+    recheckFriendship,
     isCheckingFriendship,
   } = useLiff();
 
@@ -53,11 +60,11 @@ export function SurveyContainer() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [couponCode, setCouponCode] = useState<string | null>(null);
 
-  // Check if user already submitted
+  // Check if user already submitted (no friendship requirement)
   const statusQuery = trpc.survey.getStatus.useQuery(
     { lineUserId: profile?.userId ?? '' },
     {
-      enabled: !!profile?.userId && isFriend, // Only check status if user is friend
+      enabled: !!profile?.userId,
       retry: false,
     }
   );
@@ -186,7 +193,7 @@ export function SurveyContainer() {
   };
 
   // Loading state
-  if (liffLoading || isCheckingFriendship) {
+  if (liffLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-teal-50 via-white to-emerald-50">
         <motion.div
@@ -246,12 +253,7 @@ export function SurveyContainer() {
     );
   }
 
-  // Not friend state - show add friend prompt
-  if (!isFriend) {
-    return <AddFriendPrompt />;
-  }
-
-  // Status query loading state (after friendship confirmed)
+  // Status query loading state
   if (statusQuery.isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-teal-50 via-white to-emerald-50">
@@ -267,9 +269,24 @@ export function SurveyContainer() {
     );
   }
 
-  // Success state
+  // Post-submission state: Survey submitted but need to check friendship
   if (isSubmitted && couponCode) {
-    return <SubmitSuccess couponCode={couponCode} />;
+    // If user has added OA as friend → Show coupon
+    if (isFriend) {
+      return <SubmitSuccess couponCode={couponCode} />;
+    }
+    
+    // If user has NOT added OA → Show prompt to add OA first
+    return (
+      <AddFriendPromptPostSubmit
+        couponCode={couponCode}
+        onFriendshipConfirmed={() => {
+          // Re-check friendship and if confirmed, the component will re-render
+          recheckFriendship();
+        }}
+        isCheckingFriendship={isCheckingFriendship}
+      />
+    );
   }
 
   // Main survey UI

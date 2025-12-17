@@ -15,4 +15,5 @@ export { StepPrice } from './StepPrice';
 export { StepBrand } from './StepBrand';
 export { SubmitSuccess } from './SubmitSuccess';
 export { AddFriendPrompt } from './AddFriendPrompt';
+export { AddFriendPromptPostSubmit } from './AddFriendPromptPostSubmit';
 
