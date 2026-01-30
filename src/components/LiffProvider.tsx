@@ -59,6 +59,8 @@ interface LiffContextValue {
   skipFriendshipCheck: () => void;
   /** Whether running in mock mode (profile only) */
   isMockMode: boolean;
+  /** Debug info for troubleshooting */
+  debugInfo: string;
 }
 
 // ============================================
@@ -95,6 +97,9 @@ export function LiffProvider({ children }: LiffProviderProps) {
   const [isFriend, setIsFriend] = useState(false);
   const [isCheckingFriendship, setIsCheckingFriendship] = useState(false);
   const [isMockMode, setIsMockMode] = useState(false);
+  // #region agent log
+  const [debugInfo, setDebugInfo] = useState<string>('initializing...');
+  // #endregion
 
   /**
    * Check if LIFF SDK is ready for API calls
@@ -186,6 +191,10 @@ export function LiffProvider({ children }: LiffProviderProps) {
       console.log('   LIFF ID:', liffId ? `${liffId.substring(0, 10)}...` : 'NOT SET');
       console.log('   Environment:', isDev ? 'development' : 'production');
 
+      // #region agent log
+      setDebugInfo(`step1: liffId=${liffId ? 'set' : 'NOT_SET'}, env=${isDev ? 'dev' : 'prod'}`);
+      // #endregion
+
       if (!liffId) {
         if (isDev) {
           // Use mock mode in development - but start with isFriend = false
@@ -205,22 +214,38 @@ export function LiffProvider({ children }: LiffProviderProps) {
       }
 
       try {
+        // #region agent log
+        setDebugInfo('step2: calling liff.init()...');
+        // #endregion
         // Initialize LIFF SDK
         await liff.init({ liffId });
         console.log('✅ LIFF initialized successfully');
+        // #region agent log
+        setDebugInfo('step3: liff.init() OK');
+        // #endregion
         setIsInitialized(true);
 
         // Check login status
         const loggedIn = liff.isLoggedIn();
+        const inClient = liff.isInClient();
         console.log('👤 Login status:', loggedIn ? 'Logged in' : 'Not logged in');
+        // #region agent log
+        setDebugInfo(`step4: loggedIn=${loggedIn}, inClient=${inClient}`);
+        // #endregion
         
         if (loggedIn) {
           setIsLoggedIn(true);
 
           // Fetch user profile
           try {
+            // #region agent log
+            setDebugInfo('step5: calling getProfile()...');
+            // #endregion
             const userProfile = await liff.getProfile();
             console.log('👤 Profile loaded:', userProfile.displayName);
+            // #region agent log
+            setDebugInfo(`step6: profile OK - ${userProfile.displayName}`);
+            // #endregion
             setProfile({
               userId: userProfile.userId,
               displayName: userProfile.displayName,
@@ -229,6 +254,9 @@ export function LiffProvider({ children }: LiffProviderProps) {
             });
           } catch (profileError) {
             console.error('Failed to get profile:', profileError);
+            // #region agent log
+            setDebugInfo(`step5-ERR: profile failed - ${String(profileError)}`);
+            // #endregion
             setError('Failed to get user profile');
           }
 
@@ -257,13 +285,25 @@ export function LiffProvider({ children }: LiffProviderProps) {
         } else {
           // Not logged in - redirect to LINE login
           console.log('🔐 User not logged in, checking if in LINE client...');
+          // #region agent log
+          setDebugInfo(`step4-NOLOGIN: not logged in, inClient=${inClient}`);
+          // #endregion
           if (!liff.isInClient()) {
             console.log('🔐 External browser detected, redirecting to LINE login...');
+            // #region agent log
+            setDebugInfo('step5: redirecting to LINE login...');
+            // #endregion
             liff.login();
+          } else {
+            // #region agent log
+            setDebugInfo('step5-STUCK: inClient=true but NOT logged in - BUG!');
+            // #endregion
           }
         }
       } catch (initError) {
         console.error('LIFF init error:', initError);
+        // #region agent log
+        setDebugInfo(`step2-ERR: liff.init() failed - ${String(initError)}`);
         
         // In development, fallback to mock mode for profile only
         if (isDev) {
@@ -278,6 +318,9 @@ export function LiffProvider({ children }: LiffProviderProps) {
           setError('Failed to initialize LINE LIFF');
         }
       } finally {
+        // #region agent log
+        setDebugInfo(prev => prev + ' | DONE');
+        // #endregion
         setIsLoading(false);
       }
     };
@@ -386,6 +429,9 @@ export function LiffProvider({ children }: LiffProviderProps) {
     recheckFriendship,
     skipFriendshipCheck,
     isMockMode,
+    // #region agent log
+    debugInfo,
+    // #endregion
   };
 
   return <LiffContext.Provider value={value}>{children}</LiffContext.Provider>;
