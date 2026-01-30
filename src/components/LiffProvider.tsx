@@ -358,7 +358,7 @@ export function LiffProvider({ children }: LiffProviderProps) {
         }
       } finally {
         if (cancelled) return;
-        setDebugStep((prev) => (typeof prev === 'string' ? `${prev} | DONE` : 'DONE'));
+        setDebugInfo((prev) => (typeof prev === 'string' ? `${prev} | DONE` : 'DONE'));
         setIsLoading(false);
       }
     };
