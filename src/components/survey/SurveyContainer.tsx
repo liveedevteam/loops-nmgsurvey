@@ -208,6 +208,7 @@ export function SurveyContainer() {
           <p className="text-gray-600 font-medium">Loading survey...</p>
           {/* #region agent log */}
           <p className="text-xs text-gray-400 mt-4 px-4 break-all">DEBUG: {debugInfo}</p>
+          <p className="text-xs text-gray-400 px-4 break-all">URL: {typeof window !== 'undefined' ? window.location.href : 'SSR'}</p>
           {/* #endregion */}
         </motion.div>
       </div>
@@ -256,6 +257,7 @@ export function SurveyContainer() {
           <p className="text-gray-600">Connecting to LINE...</p>
           {/* #region agent log */}
           <p className="text-xs text-gray-400 mt-4 px-4 break-all">DEBUG: {debugInfo} | isLoggedIn={String(isLoggedIn)} | hasProfile={String(!!profile)}</p>
+          <p className="text-xs text-gray-400 px-4 break-all">URL: {typeof window !== 'undefined' ? window.location.href : 'SSR'}</p>
           {/* #endregion */}
         </motion.div>
       </div>
