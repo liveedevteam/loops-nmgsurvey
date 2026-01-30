@@ -181,7 +181,7 @@ export function LiffProvider({ children }: LiffProviderProps) {
    * Initialize LIFF SDK and fetch user profile
    */
   useEffect(() => {
-    const initLiff = async () => {
+    const initLiff = () => {
       const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
       const isDev = process.env.NODE_ENV === 'development';
 
@@ -211,98 +211,124 @@ export function LiffProvider({ children }: LiffProviderProps) {
         return;
       }
 
-      try {
-        // #region agent log
-        setDebugInfo('step2: calling liff.init()...');
-        // #endregion
-        // Initialize LIFF SDK with automatic login for external browsers
-        await liff.init({ 
-          liffId,
-          withLoginOnExternalBrowser: true 
-        });
-        console.log('✅ LIFF initialized successfully');
-        // #region agent log
-        setDebugInfo('step3: liff.init() OK, waiting for liff.ready...');
-        // #endregion
+      // #region agent log
+      setDebugInfo('step2: setting up liff.ready...');
+      // #endregion
 
-        // Wait for LIFF to be fully ready
-        await liff.ready;
-        console.log('✅ LIFF ready');
-        // #region agent log
-        setDebugInfo('step4: liff.ready OK');
-        // #endregion
-        setIsInitialized(true);
-
-        // Check login status
-        const loggedIn = liff.isLoggedIn();
-        const inClient = liff.isInClient();
-        console.log('👤 Login status:', loggedIn ? 'Logged in' : 'Not logged in');
-        console.log('📱 Environment:', inClient ? 'LIFF browser' : 'External browser');
-        // #region agent log
-        setDebugInfo(`step5: loggedIn=${loggedIn}, inClient=${inClient}`);
-        // #endregion
-        
-        if (loggedIn) {
-          setIsLoggedIn(true);
-
-          // Fetch user profile
-          try {
-            // #region agent log
-            setDebugInfo('step6: calling getProfile()...');
-            // #endregion
-            const userProfile = await liff.getProfile();
-            console.log('👤 Profile loaded:', userProfile.displayName);
-            // #region agent log
-            setDebugInfo(`step7: profile OK - ${userProfile.displayName}`);
-            // #endregion
-            setProfile({
-              userId: userProfile.userId,
-              displayName: userProfile.displayName,
-              pictureUrl: userProfile.pictureUrl,
-              statusMessage: userProfile.statusMessage,
-            });
-          } catch (profileError) {
-            console.error('Failed to get profile:', profileError);
-            // #region agent log
-            setDebugInfo(`step6-ERR: profile failed - ${String(profileError)}`);
-            // #endregion
-            setError('Failed to get user profile');
-          }
-
-          // Check friendship status with OA using real API
-          console.log('🔍 Checking initial friendship status...');
-          try {
-            const friendship = await liff.getFriendship();
-            console.log('👥 Initial friendship status:', friendship.friendFlag ? 'Friend' : 'Not friend');
-            setIsFriend(friendship.friendFlag);
-          } catch (friendshipError) {
-            console.error('Failed to check friendship:', friendshipError);
-            
-            // Check if this is the "no bot linked" error - means LIFF is not configured properly
-            const errorMessage = friendshipError instanceof Error ? friendshipError.message : String(friendshipError);
-            if (errorMessage.includes('no login bot linked') || errorMessage.includes('There is no login bot')) {
-              console.log('⚠️ LIFF app is NOT linked to a LINE Official Account!');
-              console.log('📋 To fix: Go to LINE Developers Console → LIFF → Link to Official Account');
-              console.log('⚠️ Skipping friendship check - allowing user to proceed');
-              // When bot is not linked, we can't check friendship. Let user proceed.
-              setIsFriend(true);
-            } else {
-              // For other errors, assume not friend
-              setIsFriend(false);
-            }
-          }
-        } else {
-          // Not logged in - this shouldn't happen with withLoginOnExternalBrowser: true
-          // but we handle it just in case (e.g., user is in LIFF browser but not logged in)
-          console.log('⚠️ User not logged in after initialization');
+      // Use liff.ready pattern as recommended by LINE official documentation
+      liff.ready.then(async () => {
+        try {
+          console.log('✅ LIFF ready');
           // #region agent log
-          setDebugInfo(`step5-NOLOGIN: not logged in, inClient=${inClient}`);
+          setDebugInfo('step3: liff.ready resolved');
           // #endregion
+          setIsInitialized(true);
+
+          // Check login status
+          const loggedIn = liff.isLoggedIn();
+          const inClient = liff.isInClient();
+          console.log('👤 Login status:', loggedIn ? 'Logged in' : 'Not logged in');
+          console.log('📱 Environment:', inClient ? 'LIFF browser' : 'External browser');
+          // #region agent log
+          setDebugInfo(`step4: loggedIn=${loggedIn}, inClient=${inClient}`);
+          // #endregion
+          
+          if (loggedIn) {
+            setIsLoggedIn(true);
+
+            // Fetch user profile
+            try {
+              // #region agent log
+              setDebugInfo('step5: calling getProfile()...');
+              // #endregion
+              const userProfile = await liff.getProfile();
+              console.log('👤 Profile loaded:', userProfile.displayName);
+              // #region agent log
+              setDebugInfo(`step6: profile OK - ${userProfile.displayName}`);
+              // #endregion
+              setProfile({
+                userId: userProfile.userId,
+                displayName: userProfile.displayName,
+                pictureUrl: userProfile.pictureUrl,
+                statusMessage: userProfile.statusMessage,
+              });
+            } catch (profileError) {
+              console.error('Failed to get profile:', profileError);
+              // #region agent log
+              setDebugInfo(`step5-ERR: profile failed - ${String(profileError)}`);
+              // #endregion
+              setError('Failed to get user profile');
+            }
+
+            // Check friendship status with OA using real API
+            console.log('🔍 Checking initial friendship status...');
+            try {
+              const friendship = await liff.getFriendship();
+              console.log('👥 Initial friendship status:', friendship.friendFlag ? 'Friend' : 'Not friend');
+              setIsFriend(friendship.friendFlag);
+            } catch (friendshipError) {
+              console.error('Failed to check friendship:', friendshipError);
+              
+              // Check if this is the "no bot linked" error - means LIFF is not configured properly
+              const errorMessage = friendshipError instanceof Error ? friendshipError.message : String(friendshipError);
+              if (errorMessage.includes('no login bot linked') || errorMessage.includes('There is no login bot')) {
+                console.log('⚠️ LIFF app is NOT linked to a LINE Official Account!');
+                console.log('📋 To fix: Go to LINE Developers Console → LIFF → Link to Official Account');
+                console.log('⚠️ Skipping friendship check - allowing user to proceed');
+                // When bot is not linked, we can't check friendship. Let user proceed.
+                setIsFriend(true);
+              } else {
+                // For other errors, assume not friend
+                setIsFriend(false);
+              }
+            }
+          } else {
+            // Not logged in - this shouldn't happen with withLoginOnExternalBrowser: true
+            // but we handle it just in case (e.g., user is in LIFF browser but not logged in)
+            console.log('⚠️ User not logged in after initialization');
+            // #region agent log
+            setDebugInfo(`step4-NOLOGIN: not logged in, inClient=${inClient}`);
+            // #endregion
+          }
+        } catch (readyError) {
+          console.error('Error in liff.ready handler:', readyError);
+          // #region agent log
+          setDebugInfo(`step3-ERR: liff.ready handler failed - ${String(readyError)}`);
+          // #endregion
+          
+          // In development, fallback to mock mode
+          if (isDev) {
+            console.log('🔧 LIFF mock mode: Using mock data for development');
+            setIsMockMode(true);
+            setIsInitialized(true);
+            setIsLoggedIn(true);
+            setIsFriend(false);
+            setProfile(MOCK_PROFILE);
+            setError(null);
+          } else {
+            setError('Failed to process LIFF data');
+          }
+        } finally {
+          // #region agent log
+          setDebugInfo(prev => prev + ' | DONE');
+          // #endregion
+          setIsLoading(false);
         }
-      } catch (initError) {
+      });
+
+      // Initialize LIFF SDK with automatic login for external browsers
+      // Note: liff.ready will resolve when init completes
+      // #region agent log
+      setDebugInfo('step2: calling liff.init()...');
+      // #endregion
+      liff.init({ 
+        liffId,
+        withLoginOnExternalBrowser: true 
+      }).catch((initError) => {
         console.error('LIFF init error:', initError);
         // #region agent log
         setDebugInfo(`step2-ERR: liff.init() failed - ${String(initError)}`);
+        // #endregion
         
         // In development, fallback to mock mode for profile only
         if (isDev) {
@@ -316,12 +342,8 @@ export function LiffProvider({ children }: LiffProviderProps) {
         } else {
           setError('Failed to initialize LINE LIFF');
         }
-      } finally {
-        // #region agent log
-        setDebugInfo(prev => prev + ' | DONE');
-        // #endregion
         setIsLoading(false);
-      }
+      });
     };
 
     initLiff();
