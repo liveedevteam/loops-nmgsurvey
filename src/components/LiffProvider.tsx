@@ -242,8 +242,20 @@ export function LiffProvider({ children }: LiffProviderProps) {
       }
 
       try {
+        console.log('📞 Starting LIFF init...');
         setDebugStep('step2: calling liff.init()...');
-        await liff.init({ liffId });
+        
+        // Add timeout to prevent hanging (5 seconds)
+        const initPromise = liff.init({ liffId });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => {
+            console.error('⏱️ LIFF init timeout!');
+            reject(new Error('LIFF init timeout after 5s'));
+          }, 5000)
+        );
+        
+        await Promise.race([initPromise, timeoutPromise]);
+        console.log('✅ LIFF init completed successfully');
 
         // If unmounted during init
         if (cancelled) return;
@@ -339,22 +351,19 @@ export function LiffProvider({ children }: LiffProviderProps) {
       } catch (initError) {
         console.error('LIFF init error:', initError);
 
-        const isDev = process.env.NODE_ENV === 'development';
         if (cancelled) return;
 
-        setDebugStep(`step2-ERR: liff.init() failed - ${String(initError)}`);
+        const errorMsg = String(initError);
+        setDebugStep(`step2-ERR: liff.init() failed - ${errorMsg}`);
 
-        // In development, fallback to mock mode for profile only
-        if (isDev) {
-          console.log('🔧 LIFF mock mode: Using mock data for development');
-          setIsMockMode(true);
-          setIsInitialized(true);
-          setIsLoggedIn(true);
-          setIsFriend(false); // Start as not friend to test the flow
-          setProfile(MOCK_PROFILE);
-          setError(null);
+        if (errorMsg.includes('timeout')) {
+          console.log('⚠️ LIFF initialization timed out.');
+          console.log('📋 Check that the LIFF endpoint URL in LINE Developers Console matches your current URL.');
+          setError(
+            'LINE initialization timed out. Please check that the LIFF endpoint URL is correct, then reload.'
+          );
         } else {
-          setError('Failed to initialize LINE LIFF');
+          setError(`Failed to initialize LINE: ${errorMsg}`);
         }
       } finally {
         if (cancelled) return;

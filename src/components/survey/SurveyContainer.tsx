@@ -62,6 +62,12 @@ export function SurveyContainer() {
   const [formData, setFormData] = useState<SurveyFormData>(INITIAL_FORM_DATA);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [couponCode, setCouponCode] = useState<string | null>(null);
+  const [currentUrl, setCurrentUrl] = useState<string>('');
+
+  // Set current URL on client side only to avoid hydration errors
+  useEffect(() => {
+    setCurrentUrl(window.location.href);
+  }, []);
 
   // Check if user already submitted (no friendship requirement)
   const statusQuery = trpc.survey.getStatus.useQuery(
@@ -207,8 +213,12 @@ export function SurveyContainer() {
           <Loader2 className="w-12 h-12 text-teal-500 animate-spin mx-auto mb-4" />
           <p className="text-gray-600 font-medium">Loading survey...</p>
           {/* #region agent log */}
-          <p className="text-xs text-gray-400 mt-4 px-4 break-all">DEBUG: {debugInfo}</p>
-          <p className="text-xs text-gray-400 px-4 break-all">URL: {typeof window !== 'undefined' ? window.location.href : 'SSR'}</p>
+          {process.env.NODE_ENV === 'development' && (
+            <>
+              <p className="text-xs text-gray-400 mt-4 px-4 break-all">DEBUG: {debugInfo}</p>
+              {currentUrl && <p className="text-xs text-gray-400 px-4 break-all">URL: {currentUrl.split('#')[0]}</p>}
+            </>
+          )}
           {/* #endregion */}
         </motion.div>
       </div>
@@ -256,8 +266,12 @@ export function SurveyContainer() {
           <Loader2 className="w-12 h-12 text-teal-500 animate-spin mx-auto mb-4" />
           <p className="text-gray-600">Connecting to LINE...</p>
           {/* #region agent log */}
-          <p className="text-xs text-gray-400 mt-4 px-4 break-all">DEBUG: {debugInfo} | isLoggedIn={String(isLoggedIn)} | hasProfile={String(!!profile)}</p>
-          <p className="text-xs text-gray-400 px-4 break-all">URL: {typeof window !== 'undefined' ? window.location.href : 'SSR'}</p>
+          {process.env.NODE_ENV === 'development' && (
+            <>
+              <p className="text-xs text-gray-400 mt-4 px-4 break-all">DEBUG: {debugInfo} | isLoggedIn={String(isLoggedIn)} | hasProfile={String(!!profile)}</p>
+              {currentUrl && <p className="text-xs text-gray-400 px-4 break-all">URL: {currentUrl.split('#')[0]}</p>}
+            </>
+          )}
           {/* #endregion */}
         </motion.div>
       </div>
@@ -276,7 +290,9 @@ export function SurveyContainer() {
           <Loader2 className="w-12 h-12 text-teal-500 animate-spin mx-auto mb-4" />
           <p className="text-gray-600 font-medium">Checking your status...</p>
           {/* #region agent log */}
-          <p className="text-xs text-gray-400 mt-4 px-4 break-all">DEBUG: statusQuery loading | userId={profile?.userId?.substring(0, 10)}...</p>
+          {process.env.NODE_ENV === 'development' && (
+            <p className="text-xs text-gray-400 mt-4 px-4 break-all">DEBUG: statusQuery loading | userId={profile?.userId?.substring(0, 10)}...</p>
+          )}
           {/* #endregion */}
         </motion.div>
       </div>
